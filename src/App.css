@@ -58,3 +58,24 @@ button:disabled {
 button:hover:not(:disabled) {
   background-color: #45a049;
 }
+
+
+
+.wallet-connection {
+  margin-bottom: 20px;
+}
+
+.wallet-connection button {
+  background-color: #f6851b;
+  color: white;
+  font-weight: bold;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.wallet-connection button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}

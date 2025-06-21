@@ -16,6 +16,7 @@ function App() {
   const [inputValue, setInputValue] = useState('');
   const [userAddress, setUserAddress] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
 
   const notify = (message, type = 'info') => {
     toast[type](message, {
@@ -28,17 +29,20 @@ function App() {
     });
   };
 
-  const getWalletAddress = async () => {
+  const connectWallet = async () => {
     try {
       if (!window.ethereum) return notify("MetaMask not detected", 'error');
 
       const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const address = await signer.getAddress();
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      const address = accounts[0];
+
       setUserAddress(address);
-    } catch (error) {
-      console.error("Failed to get wallet address:", error);
-      notify("Failed to get wallet address", 'error');
+      setIsConnected(true);
+      notify("Wallet connected!", 'success');
+    } catch (err) {
+      console.error("Wallet connection failed:", err);
+      notify("Failed to connect wallet", 'error');
     }
   };
 
@@ -76,10 +80,6 @@ function App() {
       notify("Failed to refresh balances", 'error');
     }
   };
-
-  useEffect(() => {
-    getWalletAddress();
-  }, []);
 
   useEffect(() => {
     if (userAddress !== '') {
@@ -168,6 +168,12 @@ function App() {
       <ToastContainer />
       <h1>ContractX Wallet Dashboard</h1>
 
+      <div className="wallet-connection">
+        <button onClick={connectWallet} disabled={isConnected}>
+          {isConnected ? `Connected: ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}` : "Connect MetaMask"}
+        </button>
+      </div>
+
       <div className="info-section">
         <p><strong>Contract Name:</strong> {contractName}</p>
         <p><strong>Stored Value:</strong> {storedValue}</p>
@@ -184,13 +190,13 @@ function App() {
         />
 
         <div className="button-group">
-          <button onClick={handleSetValue} disabled={loading}>
+          <button onClick={handleSetValue} disabled={loading || !isConnected}>
             {loading ? "Processing..." : "Set Value"}
           </button>
-          <button onClick={sendEthToContract} disabled={loading}>
+          <button onClick={sendEthToContract} disabled={loading || !isConnected}>
             {loading ? "Processing..." : "Send 0.001 ETH to Contract"}
           </button>
-          <button onClick={withdrawFromContract} disabled={loading}>
+          <button onClick={withdrawFromContract} disabled={loading || !isConnected}>
             {loading ? "Processing..." : "Withdraw 0.001 ETH"}
           </button>
         </div>
