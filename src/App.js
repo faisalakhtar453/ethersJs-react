@@ -1,103 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ethers } from 'ethers';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
+import ABI from './contract/abi.json';
 
-const CONTRACT_ADDRESS = "0x5c104157248a41d644584b0bfe7efc1d41675bcc";
-
-const ABI = [
-  {
-    "inputs": [],
-    "name": "sendEthContract",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_user",
-        "type": "address"
-      }
-    ],
-    "name": "sendEthUser",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_num",
-        "type": "uint256"
-      }
-    ],
-    "name": "setValue",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_address",
-        "type": "address"
-      }
-    ],
-    "name": "accountBalance",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "contractBalance",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getValue",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "name",
-    "outputs": [
-      {
-        "internalType": "string",
-        "name": "",
-        "type": "string"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  }
-];
-
+const CONTRACT_ADDRESS = "0x91138A8d6395583080d1723207E701458EE3ba29";
 const PROVIDER_URL = "https://sepolia.infura.io/v3/385c149789d744ee8fa6af9310e18725";
 
 function App() {
@@ -106,9 +14,33 @@ function App() {
   const [contractBalance, setContractBalance] = useState('');
   const [userBalance, setUserBalance] = useState('');
   const [inputValue, setInputValue] = useState('');
+  const [userAddress, setUserAddress] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const userAddress = "0x766D17c1aC60eD4f48bFC041529F4261DfBcEA44"; // Replace or prompt dynamically
+  const notify = (message, type = 'info') => {
+    toast[type](message, {
+      position: "top-right",
+      autoClose: 4000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+    });
+  };
+
+  const getWalletAddress = async () => {
+    try {
+      if (!window.ethereum) return notify("MetaMask not detected", 'error');
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const address = await signer.getAddress();
+      setUserAddress(address);
+    } catch (error) {
+      console.error("Failed to get wallet address:", error);
+      notify("Failed to get wallet address", 'error');
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -126,6 +58,7 @@ function App() {
       setUserBalance(ethers.formatEther(userBal));
     } catch (error) {
       console.error('Error fetching data:', error);
+      notify("Failed to fetch contract data", 'error');
     }
   };
 
@@ -140,27 +73,30 @@ function App() {
       setUserBalance(ethers.formatEther(userBal));
     } catch (err) {
       console.error("Balance fetch error:", err);
+      notify("Failed to refresh balances", 'error');
     }
   };
 
   useEffect(() => {
-    fetchData();
-    refreshBalances();
+    getWalletAddress();
   }, []);
+
+  useEffect(() => {
+    if (userAddress !== '') {
+      fetchData();
+      refreshBalances();
+    }
+  }, [userAddress]);
 
   const handleSetValue = async () => {
     if (!inputValue || isNaN(inputValue)) {
-      alert("Please enter a valid number.");
-      return;
+      return notify("Please enter a valid number.", 'warning');
     }
 
     try {
       setLoading(true);
 
-      if (!window.ethereum) {
-        alert("MetaMask is not detected.");
-        return;
-      }
+      if (!window.ethereum) return notify("MetaMask not detected.", 'error');
 
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
@@ -169,12 +105,12 @@ function App() {
       const tx = await contract.setValue(Number(inputValue));
       await tx.wait();
 
-      alert("Value updated successfully!");
+      notify("Value updated successfully!", 'success');
       setInputValue('');
       fetchData();
     } catch (error) {
       console.error("Transaction failed:", error);
-      alert("Transaction failed. Check the console for details.");
+      notify("Transaction failed. See console for details.", 'error');
     } finally {
       setLoading(false);
     }
@@ -183,22 +119,22 @@ function App() {
   const sendEthToContract = async () => {
     try {
       setLoading(true);
-      if (!window.ethereum) return alert("MetaMask not detected");
+      if (!window.ethereum) return notify("MetaMask not detected", 'error');
 
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
 
-      const tx = await contract.sendEthContract({
-        value: ethers.parseEther("0.001") // Send 0.001 ETH
+      const tx = await contract.deposit({
+        value: ethers.parseEther("0.001")
       });
 
       await tx.wait();
-      alert("0.001 ETH sent to contract!");
+      notify("0.001 ETH sent to contract!", 'success');
       refreshBalances();
     } catch (err) {
       console.error("Send error:", err);
-      alert("Failed to send ETH.");
+      notify("Failed to send ETH.", 'error');
     } finally {
       setLoading(false);
     }
@@ -207,26 +143,21 @@ function App() {
   const withdrawFromContract = async () => {
     try {
       setLoading(true);
-
-      if (!window.ethereum) {
-        alert("MetaMask not detected");
-        return;
-      }
+      if (!window.ethereum) return notify("MetaMask not detected", 'error');
 
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const userAddress = await signer.getAddress();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
 
-      const tx = await contract.sendEthUser(userAddress, {
-        value: ethers.parseEther("0.001"), // sending 0.001 ETH
-      });
+      const tx = await contract.withdrawToUser(userAddress, ethers.parseEther("0.001"));
       await tx.wait();
 
-      alert("0.001 ETH withdrawn to your wallet!");
+      notify("0.001 ETH withdrawn to your wallet!", 'success');
+      refreshBalances();
     } catch (error) {
       console.error("Withdraw failed:", error);
-      alert("Transaction failed.");
+      notify("Withdraw failed.", 'error');
     } finally {
       setLoading(false);
     }
@@ -234,11 +165,15 @@ function App() {
 
   return (
     <div className="App">
-      <h1>Smart Contract Dashboard</h1>
-      <p><strong>Contract Name:</strong> {contractName}</p>
-      <p><strong>Stored Value:</strong> {storedValue}</p>
-      <p><strong>Contract Balance:</strong> {contractBalance} ETH</p>
-      <p><strong>User Balance:</strong> {userBalance} ETH</p>
+      <ToastContainer />
+      <h1>ContractX Wallet Dashboard</h1>
+
+      <div className="info-section">
+        <p><strong>Contract Name:</strong> {contractName}</p>
+        <p><strong>Stored Value:</strong> {storedValue}</p>
+        <p><strong>Contract Balance:</strong> {contractBalance} ETH</p>
+        <p><strong>User Balance:</strong> {userBalance} ETH</p>
+      </div>
 
       <div className="input-section">
         <input
@@ -247,10 +182,18 @@ function App() {
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
         />
-        <button onClick={handleSetValue} disabled={loading}>{loading ? "Processing..." : "Set Value"}</button>
 
-        <button onClick={sendEthToContract} disabled={loading}>{loading ? "Processing..." : "Send 0.001 ETH to Contract"}</button>
-        <button onClick={withdrawFromContract} disabled={loading}>{loading ? "Processing..." : "Send 0.001 ETH to User"}</button>
+        <div className="button-group">
+          <button onClick={handleSetValue} disabled={loading}>
+            {loading ? "Processing..." : "Set Value"}
+          </button>
+          <button onClick={sendEthToContract} disabled={loading}>
+            {loading ? "Processing..." : "Send 0.001 ETH to Contract"}
+          </button>
+          <button onClick={withdrawFromContract} disabled={loading}>
+            {loading ? "Processing..." : "Withdraw 0.001 ETH"}
+          </button>
+        </div>
       </div>
     </div>
   );
